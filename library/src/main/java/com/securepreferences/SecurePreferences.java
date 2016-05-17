@@ -73,9 +73,10 @@ public class SecurePreferences implements SharedPreferences {
 
     //name of the currently loaded sharedPrefFile, can be null if default
     private String sharedPrefFilename;
+	private int customIterationCount;
 
 
-    /**
+	/**
      * User password defaults to app generated password that's stores obfucated with the other preference values. Also this uses the Default shared pref file
      *
      * @param context should be ApplicationContext not Activity
@@ -132,12 +133,12 @@ public class SecurePreferences implements SharedPreferences {
             sharedPreferences = getSharedPreferenceFile(context, sharedPrefFilename);
         }
 
-        //
         if (secretKey!=null) {
             keys = secretKey;
         }else if(TextUtils.isEmpty(password)) {
             // Initialize or create encryption key
             try {
+				customIterationCount = iterationCount;
                 final String key = generateAesKeyName(context, iterationCount);
 
                 String keyAsString = sharedPreferences.getString(key, null);
@@ -152,7 +153,7 @@ public class SecurePreferences implements SharedPreferences {
                     keys = AesCbcWithIntegrity.keys(keyAsString);
                 }
 
-                if(keys ==null){
+                if(keys == null){
                     throw new GeneralSecurityException("Problem generating Key");
                 }
 
@@ -471,6 +472,9 @@ public class SecurePreferences implements SharedPreferences {
      * This method can be used if switching from the generated key to a key derived from user password
      *
      * Note: the pref keys will remain the same as they are SHA256 hashes.
+	 * And then, if already using default constructor not passing password or keys, key is saved in SharedPreference.
+	 * So that key is excepted from changing encrypt.
+	 *
      *
      * @param newPassword
 	 * @param context should be ApplicationContext not Activity
@@ -479,16 +483,27 @@ public class SecurePreferences implements SharedPreferences {
     public void handlePasswordChange(String newPassword, Context context, int iterationCount) throws GeneralSecurityException {
 
         final byte[] salt = getDeviceSerialNumber(context).getBytes();
-        AesCbcWithIntegrity.SecretKeys newKey= AesCbcWithIntegrity.generateKeyFromPassword(newPassword, salt, iterationCount);
+        AesCbcWithIntegrity.SecretKeys newKey = AesCbcWithIntegrity.generateKeyFromPassword(newPassword, salt, iterationCount);
 
         Map<String, ?> allOfThePrefs = sharedPreferences.getAll();
         Map<String, String> unencryptedPrefs = new HashMap<String, String>(allOfThePrefs.size());
         Iterator<String> keysIterator = allOfThePrefs.keySet().iterator();
-        //iterate through the current prefs unencrypting each one
-        while(keysIterator.hasNext()) {
+
+		String keyName = null;
+		if (customIterationCount != 0) {
+			keyName = generateAesKeyName(context, customIterationCount);
+		}
+
+		//iterate through the current prefs unencrypting each one
+		while(keysIterator.hasNext()) {
             String prefKey = keysIterator.next();
             Object prefValue = allOfThePrefs.get(prefKey);
-            if(prefValue instanceof String){
+
+			if (customIterationCount != 0 && prefKey.equals(keyName)) {
+				continue;
+			}
+
+			if(prefValue instanceof String){
                 //all the encrypted values will be Strings
                 final String prefValueString = (String)prefValue;
                 final String plainTextPrefValue = decrypt(prefValueString);

@@ -320,8 +320,31 @@ public class TestSecurePreferences extends AndroidTestCase {
         assertEquals(value, valueFromNewPassword);
     }
 
+    public void testChangeIterationCount_DefaultConstructor() {
+        SecurePreferences securePrefs = new SecurePreferences(getContext());
+        Editor editor = securePrefs.edit();
+        final String key = "pwchgfoo";
+        final String value = "pwchgbar";
+        editor.putString(key,value);
+        editor.commit();
 
-    public void testChangeIterationCount() {
+        String cipherText = securePrefs.getEncryptedString(key, null);
+        try {
+            securePrefs.handlePasswordChange("myfirstpassword", getContext(), 1000);
+        } catch (GeneralSecurityException e) {
+            fail("error changing passwd: " + e.getMessage());
+        }
+
+        String cipherTextFromPasswordChangedIteration = securePrefs.getEncryptedString(key, null);
+        String valueFromPasswordChangedIteration = securePrefs.getString(key, null);
+
+        assertNotNull("Cipher Text for key: " + key + " should not be null", cipherTextFromPasswordChangedIteration);
+        assertNotSame("The two cipher texts should not be the same", cipherText, cipherTextFromPasswordChangedIteration);
+        assertEquals(value, valueFromPasswordChangedIteration);
+    }
+
+
+    public void testChangeIterationCount_CustomPassword() {
         SecurePreferences securePrefs = new SecurePreferences(getContext(), "myfirstpassword", USER_PREFS_WITH_PASSWORD);
         Editor editor = securePrefs.edit();
         final String key = "pwchgfoo";
